@@ -158,7 +158,11 @@ export async function buildToolTable(ctx, spec, chain, parentSpan) {
         }
       }
       const client = await ctx.resolveMcp(ref, parentSpan);
+      // [pulse-safety-desk patch] Spec 2.1: "An MCP descriptor MAY restrict the tool
+      // names exposed to the agent." Honor { url, tools: [...] } instead of exposing all.
+      const onlyTools = typeof ref === "object" && Array.isArray(ref.tools) ? new Set(ref.tools) : null;
       for (const t of await client.listTools(parentSpan)) {
+        if (onlyTools && !onlyTools.has(t.name)) continue;
         const name = safeName(`mcp_${t.name}`);
         toolByName.set(name, { kind: "mcp", ref, client, mcpName: t.name, requiresApproval });
         toolSchemas.push(schemaFor(name, { description: t.description, parameters: t.inputSchema }));

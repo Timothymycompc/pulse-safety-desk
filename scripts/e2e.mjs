@@ -21,3 +21,17 @@ const out = await engine.run(q);
 console.log("seconds:", ((Date.now() - t0) / 1000).toFixed(1));
 console.log("consents asked:", consents);
 console.log("ANSWER:\n" + (typeof out === "string" ? out : JSON.stringify(out, null, 1)).slice(0, 2500));
+// Tool and model calls, with errors, for debugging (secrets are never in spans).
+if (process.env.E2E_TRACE) {
+  for (const s of trace.spans.values()) {
+    if (!/tool|mcp|model_call|agent/.test(s.kind)) continue;
+    const f = { ...s }; delete f.parent; delete f.messages; delete f.streamChunk;
+    console.log("SPAN", s.kind, JSON.stringify(f).slice(0, 600));
+  }
+}
+// Machine-checkable summary for tests: which tools each model call was offered.
+if (process.env.E2E_JSON) {
+  const offered = [...trace.spans.values()].filter((s) => s.kind === "model_call").map((s) => s.toolNames || []);
+  const called = [...trace.spans.values()].filter((s) => s.kind === "tool").map((s) => s.tool);
+  console.log("E2E_JSON " + JSON.stringify({ offered, called, answer: typeof out === "string" ? out : "" }));
+}

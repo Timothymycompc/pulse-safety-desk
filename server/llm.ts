@@ -21,6 +21,9 @@ const DAILY_CAP = Number(process.env.DESK_DAILY_CAP || 1200); // whole site, def
 const HOURLY_PER_VISITOR = Number(process.env.DESK_HOURLY_PER_VISITOR || 60);
 const MAX_OUTPUT_TOKENS = 2048;
 const MAX_BODY = "400kb";
+export let RETRY_WAITS_MS = [2000, 5000, 10000];
+/** Test hook: shortens retry waits. */
+export function setRetryWaits(ms: number[]): void { RETRY_WAITS_MS = ms; }
 
 let day = "";
 let dayCount = 0;
@@ -106,11 +109,24 @@ export function llmRoutes(getKey: () => string | undefined, fetchImpl: typeof fe
     const why = admit(req.ip || req.socket.remoteAddress || "unknown");
     if (why) return refuse(res, 429, why);
     try {
-      const upstream = await fetchImpl(`${GEMINI_OPENAI}/chat/completions`, {
+      const send = () => fetchImpl(`${GEMINI_OPENAI}/chat/completions`, {
         method: "POST",
         headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
         body: JSON.stringify(body),
       });
+      // The free tier allows only a few requests per minute. On a per-minute limit,
+      // wait and retry before giving up, so a busy moment doesn't break an answer.
+      let upstream = await send();
+      for (const wait of RETRY_WAITS_MS) {
+        if (upstream.status !== 429) break;
+        await upstream.body?.cancel().catch(() => {});
+        await new Promise((r) => setTimeout(r, wait));
+        upstream = await send();
+      }
+      if (upstream.status === 429) {
+        await upstream.body?.cancel().catch(() => {});
+        return refuse(res, 429, "The free model is busy right now. Try again in a minute, or add your own key in AI model settings (the gear icon).");
+      }
       await relay(upstream, res);
     } catch {
       refuse(res, 502, "Could not reach the model provider. Please try again.");

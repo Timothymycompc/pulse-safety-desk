@@ -6,7 +6,7 @@ import type { AddressInfo } from "node:net";
 import { readFileSync } from "node:fs";
 import express from "express";
 import { createApp } from "../server/index.ts";
-import { llmRoutes, cleanBody, admit, resetLimits, DEFAULT_MODEL } from "../server/llm.ts";
+import { llmRoutes, cleanBody, admit, resetLimits, setRetryWaits, DEFAULT_MODEL } from "../server/llm.ts";
 import { buildManifest, NETWORK } from "../server/manifest.ts";
 
 async function listen(app: express.Express) {
@@ -110,6 +110,31 @@ test("earlier tool calls get a thought signature; existing signatures are kept",
   assert.equal(out.messages[1].tool_calls[0].extra_content.google.thought_signature, "skip_thought_signature_validator");
   assert.equal(out.messages[3].tool_calls[0].extra_content.google.thought_signature, "REAL");
   assert.equal(out.messages[0].content, "check token");
+});
+
+test("free route retries a per-minute limit, then answers; gives a clear message if it never clears", async () => {
+  setRetryWaits([1, 1, 1]);
+  let calls = 0;
+  const flaky = (async () => {
+    calls += 1;
+    return calls < 3
+      ? new Response(JSON.stringify({ error: { code: 429 } }), { status: 429 })
+      : new Response(JSON.stringify({ choices: [{ message: { content: "ok" } }] }), { headers: { "content-type": "application/json" } });
+  }) as typeof fetch;
+  const app = express();
+  app.use(llmRoutes(() => "K-123456789", flaky));
+  const { base, close } = await listen(app);
+  resetLimits();
+  try {
+    const body = JSON.stringify({ messages: [{ role: "user", content: "hi" }] });
+    const ok = await fetch(`${base}/llm/v1/chat/completions`, { method: "POST", headers: { "content-type": "application/json" }, body });
+    assert.equal(ok.status, 200);
+    assert.equal(calls, 3);
+    calls = -100; // stays limited for every retry
+    const busy = await fetch(`${base}/llm/v1/chat/completions`, { method: "POST", headers: { "content-type": "application/json" }, body });
+    assert.equal(busy.status, 429);
+    assert.match(((await busy.json()) as any).error.message, /busy/);
+  } finally { close(); setRetryWaits([2000, 5000, 10000]); }
 });
 
 test("per-visitor hourly limit and reset", () => {
