@@ -1,0 +1,27 @@
+{
+  "name": "pulse-safety-desk",
+  "private": true,
+  "version": "0.1.0",
+  "license": "MIT",
+  "type": "module",
+  "description": "Open agentic website that checks Solana tokens, transactions and wallets for known scam traps, built on Solana Pulse.",
+  "scripts": {
+    "dev": "tsx server/index.ts",
+    "check": "tsc --noEmit",
+    "build": "esbuild server/index.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/server.mjs",
+    "start": "DESK_START=1 node dist/server.mjs",
+    "test": "tsx --test tests/*.test.ts",
+    "ship": "bash scripts/ship.sh"
+  },
+  "dependencies": {
+    "@google-cloud/secret-manager": "^7.1.0",
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^24.0.0",
+    "esbuild": "^0.28.2",
+    "tsx": "^4.23.13",
+    "typescript": "~5.8.2"
+  }
+}

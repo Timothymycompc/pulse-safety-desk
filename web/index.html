@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pulse Safety Desk</title>
+  <meta name="description" content="An open agentic website that checks Solana tokens, transactions and wallets for known scam traps before you or your agent act. Built on Solana Pulse." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=JetBrains+Mono:wght@400;600&display=swap" />
+  <link rel="stylesheet" href="./theme.css" />
+  <link rel="alternate" type="application/json" href="./agent-manifest.json" title="Agent manifest" />
+</head>
+<body>
+  <header class="desk-top">
+    <div class="desk-brand"><span class="pulse-dot" aria-hidden="true"></span>Pulse Safety Desk</div>
+    <nav class="desk-nav">
+      <a href="#for-agents">For agents</a>
+      <a href="./agent-manifest.json">Manifest</a>
+      <a href="https://github.com/Timothymycompc/pulse-safety-desk">Source</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="desk-hero">
+      <p class="eyebrow">Open agentic web · Solana</p>
+      <h1>Check it <em>before</em> you sign.</h1>
+      <p class="lede">Paste a Solana token, transaction or wallet. A small team of AI agents checks it against the known ways people get robbed, using live <a href="https://solana-pulse-gateway-1021990235790.us-central1.run.app">Solana Pulse</a> data, and tells you what it found and what it couldn't check.</p>
+      <ul class="desk-agents" aria-label="Agents on this desk">
+        <li><b>Safety desk</b><span>routes your question</span></li>
+        <li><b>Token checker</b><span>mint authority, copycats, liquidity, insiders</span></li>
+        <li><b>Transaction checker</b><span>what it does, drainer patterns</span></li>
+        <li><b>Wallet tracer</b><span>holdings, drains, where funds went</span></li>
+      </ul>
+    </section>
+
+    <section class="desk-app-wrap" aria-label="Safety desk chat">
+      <div id="app">Loading Pulse Safety Desk...</div>
+    </section>
+
+    <section class="desk-notes">
+      <div>
+        <h2>What "SAFE" means here</h2>
+        <p>A check can't make anything safe. SAFE means none of the traps we know about were found. Every fact names its source, and anything the tools couldn't get is shown as unknown, never guessed.</p>
+      </div>
+      <div id="for-agents">
+        <h2>For other agent sites</h2>
+        <p>This desk is an open agent network. Any agent site that follows the open agentic web spec can load it into its own visitor's browser and check before it acts:</p>
+        <code class="peer-url" id="peer-url">https://this-site/pulse_safety_desk</code>
+        <p class="small">It runs on your visitor's own model setup. Their key never reaches this site, and private context stays with you unless you allow a field.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="desk-foot">
+    Data: <a href="https://solana-pulse-gateway-1021990235790.us-central1.run.app">Solana Pulse</a> ·
+    Runtime: <a href="https://github.com/cognizant-ai-lab/nsdeploy">nsDeploy</a> (Apache-2.0) ·
+    Not financial advice. Never share a seed phrase.
+  </footer>
+
+  <script type="module">
+    import { boot } from "./runtime/index.js";
+    const siteBase = new URL("./", window.location.href).href;
+    document.getElementById("peer-url").textContent = new URL("pulse_safety_desk", siteBase).href;
+    boot("#app", {
+      originUrl: siteBase,
+      sandboxWorkerUrl: new URL("runtime/sandbox-worker.js", siteBase).href,
+    }).then(async (runtime) => {
+      try {
+        const site = await import("./site.js");
+        await site.customize?.({ root: document.querySelector("#app"), runtime });
+      } catch (e) {
+        console.error("Site customization error", e);
+      }
+    }).catch((e) => {
+      const a = document.querySelector("#app"); if (a) a.textContent = "Boot error: " + e.message;
+      console.error(e);
+    });
+  </script>
+</body>
+</html>
