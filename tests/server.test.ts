@@ -100,6 +100,18 @@ test("free route refuses cleanly with no server key", async () => {
   } finally { close(); }
 });
 
+test("earlier tool calls get a thought signature; existing signatures are kept", () => {
+  const out: any = cleanBody({ messages: [
+    { role: "user", content: "check token" },
+    { role: "assistant", content: null, tool_calls: [{ id: "a", type: "function", function: { name: "token_checker", arguments: "{}" } }] },
+    { role: "tool", tool_call_id: "a", content: "AVOID" },
+    { role: "assistant", content: null, tool_calls: [{ id: "b", type: "function", function: { name: "x", arguments: "{}" }, extra_content: { google: { thought_signature: "REAL" } } }] },
+  ] });
+  assert.equal(out.messages[1].tool_calls[0].extra_content.google.thought_signature, "skip_thought_signature_validator");
+  assert.equal(out.messages[3].tool_calls[0].extra_content.google.thought_signature, "REAL");
+  assert.equal(out.messages[0].content, "check token");
+});
+
 test("per-visitor hourly limit and reset", () => {
   resetLimits();
   const now = new Date("2026-11-16T10:00:00Z");

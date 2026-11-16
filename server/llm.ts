@@ -60,12 +60,31 @@ async function relay(upstream: globalThis.Response, res: Response): Promise<void
   Readable.fromWeb(upstream.body as any).pipe(res);
 }
 
+// Gemini 3 models require each earlier function call to carry its "thought signature".
+// The reference browser runtime does not keep it, so earlier tool calls get Google's
+// documented placeholder signature (ai.google.dev, "Thought signatures": dummy values
+// for history that has none). The visitor's messages are otherwise passed unchanged.
+export const PLACEHOLDER_SIGNATURE = "skip_thought_signature_validator";
+
+export function withThoughtSignatures(messages: any[]): any[] {
+  return messages.map((m) => {
+    if (!m || m.role !== "assistant" || !Array.isArray(m.tool_calls)) return m;
+    return {
+      ...m,
+      tool_calls: m.tool_calls.map((c: any) =>
+        c?.extra_content?.google?.thought_signature
+          ? c
+          : { ...c, extra_content: { ...(c?.extra_content || {}), google: { ...(c?.extra_content?.google || {}), thought_signature: PLACEHOLDER_SIGNATURE } } }),
+    };
+  });
+}
+
 /** Keeps only fields an OpenAI-compatible chat call needs, so the proxy can't be used for anything else. */
 export function cleanBody(body: any, forceModel?: string): Record<string, unknown> | null {
   if (!body || typeof body !== "object" || !Array.isArray(body.messages)) return null;
   const out: Record<string, unknown> = {
     model: forceModel || (typeof body.model === "string" ? body.model : DEFAULT_MODEL),
-    messages: body.messages,
+    messages: withThoughtSignatures(body.messages),
     stream: body.stream === true,
   };
   if (Array.isArray(body.tools) && body.tools.length) { out.tools = body.tools; out.tool_choice = body.tool_choice ?? "auto"; }
