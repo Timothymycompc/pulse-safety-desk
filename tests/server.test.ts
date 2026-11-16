@@ -7,7 +7,7 @@ import { readFileSync } from "node:fs";
 import express from "express";
 import { createApp } from "../server/index.ts";
 import { llmRoutes, cleanBody, admit, resetLimits, setRetryWaits, DEFAULT_MODEL } from "../server/llm.ts";
-import { buildManifest, NETWORK } from "../server/manifest.ts";
+import { buildManifest, manifestFor, siteFromEnv, NETWORK, HELPER_NETWORK, DESK_ORIGIN } from "../server/manifest.ts";
 
 async function listen(app: express.Express) {
   const server = app.listen(0);
@@ -145,4 +145,42 @@ test("per-visitor hourly limit and reset", () => {
   assert.match(refused || "", /free limit/);
   assert.equal(admit("visitor-b", now), null, "another visitor is unaffected");
   assert.equal(admit("visitor-a", new Date("2026-11-16T11:00:00Z")), null, "resets next hour");
+});
+
+test("Wallet Helper manifest: own router, desk as an allowed peer, no open policy", () => {
+  const m: any = manifestFor("helper", "https://helper.example");
+  assert.equal(m.brand, "Wallet Helper");
+  assert.equal(m.networks[0].name, HELPER_NETWORK);
+  assert.equal(m.networks[0].front_man, "wallet_helper");
+  assert.equal(m.llm_router.base_url, "https://helper.example/llm/v1");
+  assert.equal(m.llm_router.publisher_funded, true);
+  assert.ok(m.allowed_peers.includes(DESK_ORIGIN));
+  assert.equal(m.peer_policy, undefined);
+  assert.equal(siteFromEnv("helper"), "helper");
+  assert.equal(siteFromEnv(undefined), "desk");
+});
+
+test("Wallet Helper network hands safety questions to the desk on another origin", () => {
+  const net = JSON.parse(readFileSync(new URL("../helper/wallet_helper.network.json", import.meta.url), "utf8"));
+  assert.equal(net.tools[0].name, "wallet_helper");
+  assert.ok(net.tools[0].tools.includes(`${DESK_ORIGIN}/${NETWORK}`));
+  const reader = net.tools.find((t: any) => t.name === "wallet_reader");
+  const mcp = reader.tools.find((t: any) => typeof t === "object");
+  assert.deepEqual(mcp.tools, ["wallet", "balance", "history"]);
+});
+
+test("helper site serves its own page and network plus the shared runtime, never the desk's files", async () => {
+  const { base, close } = await listen(createApp(() => undefined, "helper"));
+  try {
+    const page = await fetch(`${base}/`);
+    assert.match(await page.text(), /<title>Wallet Helper<\/title>/);
+    const m: any = await (await fetch(`${base}/agent-manifest.json`)).json();
+    assert.equal(m.brand, "Wallet Helper");
+    const net = await fetch(`${base}/wallet_helper.network.json`);
+    assert.equal(net.status, 200);
+    assert.equal(net.headers.get("access-control-allow-origin"), "*");
+    assert.equal((await fetch(`${base}/runtime/index.js`)).status, 200);
+    assert.equal((await fetch(`${base}/theme.css`)).status, 200);
+    assert.equal((await fetch(`${base}/pulse_safety_desk.network.json`)).status, 404);
+  } finally { close(); }
 });

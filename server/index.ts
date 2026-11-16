@@ -6,10 +6,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadSecrets } from "./secrets.js";
 import { llmRoutes } from "./llm.js";
-import { buildManifest } from "./manifest.js";
+import { manifestFor, siteFromEnv, type Site } from "./manifest.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const WEB = process.env.DESK_WEB_DIR || path.resolve(here, "../web");
+const HELPER = path.resolve(WEB, "../helper");
+// Files the Wallet Helper borrows from the desk's folder: the runtime, the page script and the theme.
+// Nothing else (no desk page or network file) is served from the helper's origin.
+const SHARED = /^\/(runtime\/.+|site\.js|theme\.css)$/;
 
 // Sandbox worker CSP from the reference runtime: peer code runs with no network access.
 const WORKER_CSP = "default-src 'none'; script-src blob:; connect-src 'none'; worker-src 'none'";
@@ -23,7 +27,10 @@ export function publicOrigin(req: express.Request): string {
   return `${proto}://${req.get("host")}`;
 }
 
-export function createApp(getKey: () => string | undefined = () => process.env.GEMINI_API_KEY): express.Express {
+export function createApp(
+  getKey: () => string | undefined = () => process.env.GEMINI_API_KEY,
+  site: Site = siteFromEnv(),
+): express.Express {
   const app = express();
   app.disable("x-powered-by");
   app.set("trust proxy", true);
@@ -45,18 +52,25 @@ export function createApp(getKey: () => string | undefined = () => process.env.G
 
   app.get("/agent-manifest.json", (req, res) => {
     res.setHeader("cache-control", "public, max-age=300");
-    res.json(buildManifest(publicOrigin(req)));
+    res.json(manifestFor(site, publicOrigin(req)));
   });
 
   app.use(llmRoutes(getKey));
 
-  app.use(express.static(WEB, {
+  const statics = {
     extensions: ["html"],
-    setHeaders: (res, file) => {
+    setHeaders: (res: express.Response, file: string) => {
       if (file.endsWith(".js") || file.endsWith(".mjs")) res.setHeader("content-type", "text/javascript; charset=utf-8");
       res.setHeader("cache-control", file.includes(`${path.sep}runtime${path.sep}`) ? "public, max-age=3600" : "public, max-age=300");
     },
-  }));
+  };
+  if (site === "helper") {
+    app.use(express.static(HELPER, statics));
+    const shared = express.static(WEB, { ...statics, extensions: false as const });
+    app.use((req, res, next) => (SHARED.test(req.path) ? shared(req, res, next) : next()));
+  } else {
+    app.use(express.static(WEB, statics));
+  }
 
   app.use((_req, res) => { res.status(404).json({ error: "not found" }); });
   return app;
@@ -66,5 +80,6 @@ const isMain = process.argv[1] && fileURLToPath(import.meta.url) === path.resolv
 if (isMain || process.env.DESK_START === "1") {
   await loadSecrets(["GEMINI_API_KEY"]);
   const port = Number(process.env.PORT || 8080);
-  createApp().listen(port, () => console.log(`Pulse Safety Desk on :${port}`));
+  const site = siteFromEnv();
+  createApp(undefined, site).listen(port, () => console.log(`${site === "helper" ? "Wallet Helper" : "Pulse Safety Desk"} on :${port}`));
 }

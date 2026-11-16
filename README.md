@@ -25,9 +25,22 @@ https://<this-site>/pulse_safety_desk
 
 Published files: `/agent-manifest.json` and `/pulse_safety_desk.network.json`, both with CORS. The peer runs on the caller's own model router; the caller's key never reaches this site.
 
+### Live example: Wallet Helper
+
+[Wallet Helper](https://pulse-wallet-helper-1021990235790.us-central1.run.app) is a second agent site on its own origin, built from this repo (`helper/`). It reads a Solana wallet itself (Solana Pulse `wallet`, `balance`, `history`) and hands every safety question to the desk:
+
+```
+Wallet Helper (its own origin)  ->  Pulse Safety Desk (this site, loaded as a peer)  ->  Solana Pulse MCP
+```
+
+The visitor approves the hand-off before the browser contacts the desk. The desk's agents then run in the visitor's browser on Wallet Helper's model, and the desk's server sees nothing. Wallet Helper's manifest allows only the desk and Solana Pulse (`allowed_peers`), while the desk itself is open to any site.
+
+Tested live 2026-11-16 (`scripts/e2e.mjs`): "Someone sent me a token I don't know" + the BONK mint went Wallet Helper -> desk -> token checker -> Pulse `token_safety` and came back SAFE with the "known traps only" caveat, in 33 s; a wallet question read holdings, balance and history, and the numbers matched Pulse's `/api/tools/wallet` and `/api/tools/balance`.
+
 ## How it's built
 
 - `web/`: the agentic website (page, network definition, runtime).
+- `helper/`: Wallet Helper's page and network. The same server runs it when `DESK_SITE=helper`, borrowing only the runtime, `site.js` and `theme.css` from `web/`.
 - `server/`: a small Express server that serves `web/`, builds the manifest for the serving origin, and offers two model routes:
   - `/llm/v1`: free default inference (server-held Gemini key, one cheap model, capped per visitor and per day; visitor IPs are never stored).
   - `/byok/v1`: forwards only the visitor's own key (bring your own key).
@@ -40,7 +53,8 @@ Published files: `/agent-manifest.json` and `/pulse_safety_desk.network.json`, b
 npm install
 npm test
 npm run dev        # http://localhost:8080
-npm run ship       # test, commit, push, deploy
+npm run ship       # test, commit, push, deploy both sites
+bash scripts/deploy.sh helper            # deploy only Wallet Helper
 node scripts/e2e.mjs [site] "question"   # runs the real runtime against a live desk
 ```
 

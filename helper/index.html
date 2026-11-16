@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Wallet Helper</title>
+  <meta name="description" content="An open agentic website that reads a Solana wallet in plain words and asks Pulse Safety Desk, a separate agent site, to check tokens and transactions before you act." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=JetBrains+Mono:wght@400;600&display=swap" />
+  <link rel="stylesheet" href="./theme.css" />
+  <link rel="alternate" type="application/json" href="./agent-manifest.json" title="Agent manifest" />
+</head>
+<body>
+  <header class="desk-top">
+    <div class="desk-brand"><span class="pulse-dot" aria-hidden="true"></span>Wallet Helper</div>
+    <nav class="desk-nav">
+      <a href="#how">How it works</a>
+      <a href="./agent-manifest.json">Manifest</a>
+      <a href="https://github.com/Timothymycompc/pulse-safety-desk">Source</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="desk-hero">
+      <p class="eyebrow">Open agentic web · Solana · two sites working together</p>
+      <h1>Know your wallet. <em>Check</em> before you touch.</h1>
+      <p class="lede">Paste a Solana wallet address. Wallet Helper reads what it holds and what happened lately. For any safety question it hands off to <a id="desk-link" href="https://pulse-safety-desk-1021990235790.us-central1.run.app">Pulse Safety Desk</a>, a separate agent site, which runs right here in your browser after you allow it.</p>
+      <ol class="hop-strip" id="how" aria-label="How a question travels">
+        <li><b>Wallet Helper</b><span>this site · reads the wallet</span></li>
+        <li><b>Pulse Safety Desk</b><span>another site · checks for scam traps</span></li>
+        <li><b>Solana Pulse</b><span>live on-chain data</span></li>
+      </ol>
+    </section>
+
+    <section class="desk-app-wrap" aria-label="Wallet helper chat">
+      <div id="app">Loading Wallet Helper...</div>
+    </section>
+
+    <section class="desk-notes">
+      <div>
+        <h2>Why two sites?</h2>
+        <p>Wallet Helper doesn't build its own scam checks. It borrows them from Pulse Safety Desk, the way one web page links to another. Your browser fetches the desk's published agents and runs them on this site's model, so nothing you type is sent to the desk's server. You approve the hand-off first.</p>
+      </div>
+      <div>
+        <h2>What it never does</h2>
+        <p>It never asks for a seed phrase or private key, never signs and never moves funds. Verdicts come only from Pulse Safety Desk. SAFE means none of the known traps were found, not that something can't go wrong. Anything the tools couldn't get is shown as unknown.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="desk-foot">
+    Data: <a href="https://solana-pulse-gateway-1021990235790.us-central1.run.app">Solana Pulse</a> ·
+    Safety checks: <a href="https://pulse-safety-desk-1021990235790.us-central1.run.app">Pulse Safety Desk</a> ·
+    Runtime: <a href="https://github.com/cognizant-ai-lab/nsdeploy">nsDeploy</a> (Apache-2.0) ·
+    Not financial advice. Never share a seed phrase.
+  </footer>
+
+  <script type="module">
+    import { boot } from "./runtime/index.js";
+    const siteBase = new URL("./", window.location.href).href;
+    boot("#app", {
+      originUrl: siteBase,
+      sandboxWorkerUrl: new URL("runtime/sandbox-worker.js", siteBase).href,
+    }).then(async (runtime) => {
+      try {
+        const site = await import("./site.js");
+        await site.customize?.({ root: document.querySelector("#app"), runtime });
+      } catch (e) {
+        console.error("Site customization error", e);
+      }
+    }).catch((e) => {
+      const a = document.querySelector("#app"); if (a) a.textContent = "Boot error: " + e.message;
+      console.error(e);
+    });
+  </script>
+</body>
+</html>

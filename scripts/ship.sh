@@ -9,3 +9,4 @@ git add -A
 git diff --cached --quiet || git commit -m "$MSG"
 git push
 bash scripts/deploy.sh
+bash scripts/deploy.sh helper
