@@ -2,7 +2,7 @@
 
 This folder is the browser runtime from [cognizant-ai-lab/nsdeploy](https://github.com/cognizant-ai-lab/nsdeploy)
 (`nsdeploy/runtime/`, Apache-2.0, see `LICENSE.txt`; upstream commit in `UPSTREAM_COMMIT`).
-Pulse Safety Desk changed four things. Each change is marked `[pulse-safety-desk patch]` in the code.
+Pulse Safety Desk changed five things. Each change is marked `[pulse-safety-desk patch]` in the code.
 
 1. `engine.js`, `llm.js`: a manifest may set `llm_router.publisher_funded: true`, so the site's own
    default router runs without a visitor key (spec section 4, "Default inference"). Peers inherit it
@@ -16,3 +16,5 @@ Pulse Safety Desk changed four things. Each change is marked `[pulse-safety-desk
    block on Send) now honor the publisher-funded router from change 1. Before, the engine could run
    without a visitor key but the page still stopped every visitor and asked for one. The badge reads
    "Free model · no key needed" instead.
+5. `ui.js`: the Developer view's agent graph printed `[object Object]` for an MCP descriptor
+   `{ url, tools }` (change 2); it now shows the server's host.

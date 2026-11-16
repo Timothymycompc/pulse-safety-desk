@@ -1524,7 +1524,8 @@ function renderNodes(el, net, activeAgents, activeOrigins = new Set()) {
   const tools = net.config.tools || [];
   const specByName = new Map(tools.filter((a) => a && a.name).map((a) => [a.name, a]));
   const isAgent = (n) => { const s = specByName.get(n); return !!(s && s.instructions && !s.class && !s.toolbox); };
-  const hostOfRef = (ref) => { try { return new URL(ref).host; } catch { return String(ref); } };
+  // [pulse-safety-desk patch] MCP refs may be { url, tools } objects (spec 2.1); show the host.
+  const hostOfRef = (ref) => { const u = typeof ref === "string" ? ref : ref?.url; try { return new URL(u).host; } catch { return String(u ?? "tool"); } };
   const front = net.findFrontMan();
   const rendered = new Set();
 

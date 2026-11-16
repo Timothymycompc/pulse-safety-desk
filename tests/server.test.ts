@@ -184,3 +184,14 @@ test("helper site serves its own page and network plus the shared runtime, never
     assert.equal((await fetch(`${base}/pulse_safety_desk.network.json`)).status, 404);
   } finally { close(); }
 });
+
+test("peer address: a browser is sent to the explainer section, an agent gets a manifest pointer", async () => {
+  const { base, close } = await listen(createApp(() => undefined, "desk"));
+  try {
+    const html = await fetch(`${base}/${NETWORK}`, { headers: { accept: "text/html" }, redirect: "manual" });
+    assert.equal(html.status, 302);
+    assert.equal(html.headers.get("location"), "/#for-agents");
+    const json: any = await (await fetch(`${base}/${NETWORK}`, { headers: { accept: "application/json" } })).json();
+    assert.equal(json.manifest, "/agent-manifest.json");
+  } finally { close(); }
+});

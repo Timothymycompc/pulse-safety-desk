@@ -6,7 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadSecrets } from "./secrets.js";
 import { llmRoutes } from "./llm.js";
-import { manifestFor, siteFromEnv, type Site } from "./manifest.js";
+import { manifestFor, siteFromEnv, NETWORK, HELPER_NETWORK, type Site } from "./manifest.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const WEB = process.env.DESK_WEB_DIR || path.resolve(here, "../web");
@@ -53,6 +53,15 @@ export function createApp(
   app.get("/agent-manifest.json", (req, res) => {
     res.setHeader("cache-control", "public, max-age=300");
     res.json(manifestFor(site, publicOrigin(req)));
+  });
+
+  // The peer address (https://<site>/<network>) is what other agent sites load. A person who opens it
+  // in a browser goes to the page section that explains it; anything else gets a pointer to the manifest.
+  const network = site === "helper" ? HELPER_NETWORK : NETWORK;
+  app.get(`/${network}`, (req, res) => {
+    if (req.accepts(["html", "json"]) === "html") return res.redirect(302, site === "helper" ? "/#how" : "/#for-agents");
+    res.setHeader("access-control-allow-origin", "*");
+    res.json({ network, manifest: "/agent-manifest.json", hocon: `/${network}.network.json`, note: "Agent sites load this network through the manifest." });
   });
 
   app.use(llmRoutes(getKey));
