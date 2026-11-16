@@ -10,6 +10,6 @@ gcloud run deploy "$SERVICE" \
   --project "$PROJECT" --region "$REGION" --source . \
   --allow-unauthenticated \
   --set-env-vars "GCP_PROJECT_ID=$PROJECT" \
-  --memory 512Mi --cpu 1 --min-instances 0 --max-instances 3 \
+  --memory 512Mi --cpu 1 --min-instances 0 --max-instances 1 \
   --quiet
 gcloud run services describe "$SERVICE" --project "$PROJECT" --region "$REGION" --format "value(status.url)"

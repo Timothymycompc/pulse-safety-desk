@@ -36,3 +36,52 @@ export async function customize({ root }) {
     if (!queued) { queued = true; setTimeout(run, 250); }
   }).observe(root, { childList: true, subtree: true, characterData: true });
 }
+
+// ---- Line for the shared free model --------------------------------------------
+// Each tab gets a random ticket. Model calls to this site carry it, and while one is
+// waiting the page shows "You're #N in line · about X s". Nothing personal is sent.
+const TICKET = (crypto.randomUUID?.() || String(Math.random()).slice(2)).slice(0, 36);
+let pending = 0;
+let polling = null;
+
+function lineBanner() {
+  let el = document.getElementById("desk-line");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "desk-line";
+    el.className = "desk-line";
+    el.setAttribute("role", "status");
+    el.setAttribute("aria-live", "polite");
+    el.hidden = true;
+    document.querySelector(".desk-app-wrap")?.prepend(el);
+  }
+  return el;
+}
+
+async function pollLine() {
+  const el = lineBanner();
+  try {
+    const r = await fetch(`./queue?ticket=${encodeURIComponent(TICKET)}`, { cache: "no-store" });
+    const s = await r.json();
+    if (s.position > 0) {
+      el.innerHTML = `<span class="desk-line-dot"></span>You're <b>#${s.position}</b> in line for the free model · about <b>${s.eta_seconds} s</b>. Your question will run automatically.`;
+      el.hidden = false;
+    } else el.hidden = true;
+  } catch { el.hidden = true; }
+}
+
+const realFetch = window.fetch.bind(window);
+window.fetch = async (input, init = {}) => {
+  const url = typeof input === "string" ? input : input?.url || "";
+  if (!/\/llm\/v1\/chat\/completions$/.test(new URL(url, location.href).pathname)) return realFetch(input, init);
+  const headers = new Headers(init.headers || (typeof input !== "string" ? input.headers : undefined));
+  headers.set("x-desk-ticket", TICKET);
+  pending += 1;
+  if (!polling) { polling = setInterval(pollLine, 1500); setTimeout(pollLine, 400); }
+  try {
+    return await realFetch(input, { ...init, headers });
+  } finally {
+    pending -= 1;
+    if (pending <= 0 && polling) { clearInterval(polling); polling = null; lineBanner().hidden = true; }
+  }
+};

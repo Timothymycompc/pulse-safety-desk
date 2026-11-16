@@ -13,6 +13,7 @@ import type { Request, Response, Router } from "express";
 import express from "express";
 import { createHash, randomBytes } from "node:crypto";
 import { Readable } from "node:stream";
+import { ModelQueue } from "./queue.js";
 
 export const GEMINI_OPENAI = "https://generativelanguage.googleapis.com/v1beta/openai";
 export const DEFAULT_MODEL = process.env.DESK_MODEL || "gemini-flash-lite-latest";
@@ -97,7 +98,7 @@ export function cleanBody(body: any, forceModel?: string): Record<string, unknow
   return out;
 }
 
-export function llmRoutes(getKey: () => string | undefined, fetchImpl: typeof fetch = fetch): Router {
+export function llmRoutes(getKey: () => string | undefined, fetchImpl: typeof fetch = fetch, queue = new ModelQueue()): Router {
   const r = express.Router();
   r.use(express.json({ limit: MAX_BODY }));
 
@@ -108,6 +109,10 @@ export function llmRoutes(getKey: () => string | undefined, fetchImpl: typeof fe
     if (!body) return refuse(res, 400, "Expected an OpenAI-style chat request with messages.");
     const why = admit(req.ip || req.socket.remoteAddress || "unknown");
     if (why) return refuse(res, 429, why);
+    // Wait in line for the shared free model (see queue.ts). The page shows the position.
+    const ticket = String(req.get("x-desk-ticket") || "").slice(0, 64);
+    try { await queue.acquire(ticket); } catch (e) { return refuse(res, 429, (e as Error).message); }
+    if (req.socket.destroyed) return; // visitor left while waiting
     try {
       const send = () => fetchImpl(`${GEMINI_OPENAI}/chat/completions`, {
         method: "POST",
@@ -131,6 +136,12 @@ export function llmRoutes(getKey: () => string | undefined, fetchImpl: typeof fe
     } catch {
       refuse(res, 502, "Could not reach the model provider. Please try again.");
     }
+  });
+
+  // Where this tab is in line: { waiting, position, eta_seconds, per_minute }.
+  r.get("/queue", (req: Request, res: Response) => {
+    res.setHeader("cache-control", "no-store");
+    res.json(queue.status(String(req.query.ticket || "").slice(0, 64)));
   });
 
   r.get("/llm/v1/models", (_req, res) => { res.json({ object: "list", data: [{ id: DEFAULT_MODEL, object: "model" }] }); });

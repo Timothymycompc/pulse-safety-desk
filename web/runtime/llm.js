@@ -187,8 +187,16 @@ export class LlmClient {
       }
       if (delta.tool_calls) {
         for (const tc of delta.tool_calls) {
-          const idx = tc.index ?? 0;
+          let idx = tc.index ?? 0;
+          // [pulse-safety-desk patch] Some OpenAI-compatible providers (Gemini) send
+          // parallel tool calls with the same index but distinct ids. A new id at an
+          // occupied index starts a new call instead of merging names and arguments.
+          if (tc.id && toolCalls[idx] && toolCalls[idx].id && toolCalls[idx].id !== tc.id) {
+            const existing = toolCalls.findIndex((c) => c && c.id === tc.id);
+            idx = existing >= 0 ? existing : toolCalls.length;
+          }
           if (!toolCalls[idx]) toolCalls[idx] = { id: tc.id, type: "function", function: { name: "", arguments: "" } };
+          if (tc.extra_content && !toolCalls[idx].extra_content) toolCalls[idx].extra_content = tc.extra_content;
           if (tc.id) toolCalls[idx].id = tc.id;
           if (tc.function?.name) toolCalls[idx].function.name += tc.function.name;
           if (tc.function?.arguments) toolCalls[idx].function.arguments += tc.function.arguments;
