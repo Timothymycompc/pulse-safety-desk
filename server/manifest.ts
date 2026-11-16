@@ -17,7 +17,7 @@ export function buildManifest(origin: string): Record<string, unknown> {
         tags: ["solana", "safety", "scam-check", "mcp", "solana-pulse"],
         sample_queries: [
           "Is this token safe to buy? DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263",
-          "What does this transaction do? Paste a signature.",
+          "Check this transaction before I sign it: <paste the base64 transaction>. I meant to send 5 USDC to <address>.",
           "My wallet got drained. Where did my funds go?",
         ],
       },
