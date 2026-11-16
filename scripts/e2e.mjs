@@ -25,8 +25,8 @@ console.log("ANSWER:\n" + (typeof out === "string" ? out : JSON.stringify(out, n
 if (process.env.E2E_TRACE) {
   for (const s of trace.spans.values()) {
     if (!/tool|mcp|model_call|agent/.test(s.kind)) continue;
-    const f = { ...s }; delete f.parent; delete f.messages; delete f.streamChunk;
-    console.log("SPAN", s.kind, JSON.stringify(f).slice(0, 600));
+    const err = s.error?.message || s.error || s.errorMessage || "";
+    console.log("SPAN", s.kind, s.status, s.tool || s.method || s.agent || "", String(err).slice(0, 400), "| ms", Math.round(s.durationMs || 0));
   }
 }
 // Machine-checkable summary for tests: which tools each model call was offered.

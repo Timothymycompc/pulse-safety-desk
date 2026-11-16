@@ -31,7 +31,8 @@ Published files: `/agent-manifest.json` and `/pulse_safety_desk.network.json`, b
 - `server/`: a small Express server that serves `web/`, builds the manifest for the serving origin, and offers two model routes:
   - `/llm/v1`: free default inference (server-held Gemini key, one cheap model, capped per visitor and per day; visitor IPs are never stored).
   - `/byok/v1`: forwards only the visitor's own key (bring your own key).
-- The vendored runtime carries one small patch (marked `[pulse-safety-desk patch]` in `engine.js` and `llm.js`): a manifest can set `llm_router.publisher_funded: true` so the site's own default router runs without a visitor key (spec section 4, Default inference).
+- The vendored runtime carries three small fixes, listed in [`web/runtime/CHANGES.md`](web/runtime/CHANGES.md): site-funded default model, MCP tool limits, and Gemini's parallel tool calls.
+- A line for the shared free model (`server/queue.ts`): calls are spaced to the free tier's per-minute limit, and the page shows each visitor's place in line and wait time.
 - The model proxy adds Gemini's documented placeholder thought signature to earlier tool calls, which the runtime does not keep.
 - Secrets come from Google Secret Manager at startup. Deployed on Google Cloud Run.
 
