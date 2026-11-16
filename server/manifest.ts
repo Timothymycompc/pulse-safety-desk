@@ -28,6 +28,7 @@ export function buildManifest(origin: string): Record<string, unknown> {
       base_url: `${o}/llm/v1`,
       mock: false,
       byok_router: `${o}/byok/v1`,
+      publisher_funded: true,
       default_model: "gemini-flash-lite-latest",
       provider: "Google Gemini (OpenAI-compatible)",
     },

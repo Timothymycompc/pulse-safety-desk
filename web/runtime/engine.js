@@ -67,7 +67,11 @@ export function selectTopRouter(manifest, routerOverride, byokKey, modelOverride
   if (requested) {
     return { baseUrl: requested, mock: declared.mock === true && sameRouter(requested, declared.base_url), upgradedToByok: false };
   }
-  return { baseUrl: declared.base_url || "", mock: declared.mock === true, upgradedToByok: false };
+  // [pulse-safety-desk patch] Spec section 4 "Default inference": a site MAY publish a
+  // publisher-funded default router that works without a visitor key. Only the top
+  // site's own declared base_url can be keyless, and only when no visitor key is set.
+  return { baseUrl: declared.base_url || "", mock: declared.mock === true, upgradedToByok: false,
+    keyless: declared.mock !== true && declared.publisher_funded === true && !!declared.base_url };
 }
 
 export function manifestAllowsPeer(target, manifest, runtimeAllowedPeers = new Set()) {
@@ -89,7 +93,7 @@ export function selectPeerRouter(callerRouter) {
   if (!callerRouter?.baseUrl) {
     throw new Error("The caller has no active LLM router to use for this peer network.");
   }
-  return { baseUrl: callerRouter.baseUrl, mock: callerRouter.mock === true };
+  return { baseUrl: callerRouter.baseUrl, mock: callerRouter.mock === true, keyless: callerRouter.keyless === true };
 }
 
 export class Engine {
@@ -209,12 +213,14 @@ export class Engine {
     // contribute network definitions only and can never redirect execution or keys.
     let routerBase;
     let mock;
+    let keyless = false;
     if (isTop) {
       const selected = selectTopRouter(manifest, this.routerOverride, this.byokKey, this.modelOverride);
       routerBase = selected.baseUrl;
       mock = selected.mock;
+      keyless = selected.keyless === true;
       this.routerOverride = selected.upgradedToByok ? routerBase : this.routerOverride;
-      this.userRouter = { baseUrl: routerBase, mock };
+      this.userRouter = { baseUrl: routerBase, mock, keyless };
     } else {
       // A peer contributes its network definition, not its execution environment.
       // It always runs in this browser with the top caller's active router, even
@@ -222,8 +228,9 @@ export class Engine {
       const selected = selectPeerRouter(this.userRouter);
       routerBase = selected.baseUrl;
       mock = selected.mock;
+      keyless = selected.keyless === true;
     }
-    const llm = new LlmClient({ baseUrl: routerBase, apiKey: this.byokKey, trace: this.trace, mock });
+    const llm = new LlmClient({ baseUrl: routerBase, apiKey: this.byokKey, trace: this.trace, mock, keyless });
     return { network, bundleUrl, integrity, llm, hoconUrl, validation };
   }
 

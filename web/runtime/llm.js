@@ -51,11 +51,12 @@ export function browserMockCompletion(messages = [], tools = []) {
 // Authorization.
 
 export class LlmClient {
-  constructor({ baseUrl, apiKey, trace, mock }) {
+  constructor({ baseUrl, apiKey, trace, mock, keyless }) {
     this.baseUrl = (baseUrl || "").replace(/\/$/, "");
     this.apiKey = apiKey || "";
     this.trace = trace;
     this.mock = !!mock;
+    this.keyless = !!keyless; // [pulse-safety-desk patch] publisher-funded default router
   }
 
   // messages: [{role, content, tool_calls?, tool_call_id?, name?}]
@@ -67,7 +68,7 @@ export class LlmClient {
     // placeholder "demo" to a live provider (which returns a confusing 401). This
     // happens e.g. when a shared/reloaded URL keeps the proxy router but no saved
     // BYOK profile/key is available in this browser.
-    if (!this.mock && (!this.apiKey || this.apiKey === "demo")) {
+    if (!this.mock && !this.keyless && (!this.apiKey || this.apiKey === "demo")) {
       throw new Error(`An AI provider key is required for ${hostOf(this.baseUrl) || "the configured provider"}. Open ⚙ AI model settings, paste your key, then select Save and start. Your key stays in this browser and is sent only to the configured provider.`);
     }
     assertModelForRouter(model, this.mock, hostOf(this.baseUrl));

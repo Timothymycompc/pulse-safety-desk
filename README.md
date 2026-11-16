@@ -52,3 +52,4 @@ See [PRINCIPLES.md](PRINCIPLES.md). In short: a check can't make anything safe; 
 - Pulse on GitHub: https://github.com/Timothymycompc/solana-pulse-ai-agent-gateway
 
 License: MIT for this project's code; the vendored runtime in `web/runtime/` is Apache-2.0 (see `web/runtime/LICENSE.txt`).
+- The vendored runtime carries one patch (marked `[pulse-safety-desk patch]` in `engine.js` and `llm.js`): a manifest can set `llm_router.publisher_funded: true` so the site's own default router runs without a visitor key (spec section 4, Default inference). Offer it upstream to nsDeploy.

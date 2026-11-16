@@ -41,7 +41,7 @@ export function createApp(getKey: () => string | undefined = () => process.env.G
     next();
   });
 
-  app.get("/healthz", (_req, res) => { res.json({ ok: true, model_key: !!getKey() }); });
+  app.get("/health", (_req, res) => { res.json({ ok: true, model_key: !!getKey() }); });
 
   app.get("/agent-manifest.json", (req, res) => {
     res.setHeader("cache-control", "public, max-age=300");

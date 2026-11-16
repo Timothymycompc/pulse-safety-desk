@@ -23,6 +23,7 @@ test("manifest points every route at the serving origin and names the front agen
   assert.equal(m.llm_router.base_url, "https://desk.example/llm/v1");
   assert.equal(m.llm_router.byok_router, "https://desk.example/byok/v1");
   assert.equal(m.llm_router.mock, false);
+  assert.equal(m.llm_router.publisher_funded, true);
   assert.equal(m.peer_policy.mode, "open");
 });
 
