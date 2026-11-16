@@ -31,6 +31,8 @@ Published files: `/agent-manifest.json` and `/pulse_safety_desk.network.json`, b
 - `server/`: a small Express server that serves `web/`, builds the manifest for the serving origin, and offers two model routes:
   - `/llm/v1`: free default inference (server-held Gemini key, one cheap model, capped per visitor and per day; visitor IPs are never stored).
   - `/byok/v1`: forwards only the visitor's own key (bring your own key).
+- The vendored runtime carries one small patch (marked `[pulse-safety-desk patch]` in `engine.js` and `llm.js`): a manifest can set `llm_router.publisher_funded: true` so the site's own default router runs without a visitor key (spec section 4, Default inference).
+- The model proxy adds Gemini's documented placeholder thought signature to earlier tool calls, which the runtime does not keep.
 - Secrets come from Google Secret Manager at startup. Deployed on Google Cloud Run.
 
 ```
@@ -38,6 +40,7 @@ npm install
 npm test
 npm run dev        # http://localhost:8080
 npm run ship       # test, commit, push, deploy
+node scripts/e2e.mjs [site] "question"   # runs the real runtime against a live desk
 ```
 
 ## Principles
@@ -52,4 +55,3 @@ See [PRINCIPLES.md](PRINCIPLES.md). In short: a check can't make anything safe; 
 - Pulse on GitHub: https://github.com/Timothymycompc/solana-pulse-ai-agent-gateway
 
 License: MIT for this project's code; the vendored runtime in `web/runtime/` is Apache-2.0 (see `web/runtime/LICENSE.txt`).
-- The vendored runtime carries one patch (marked `[pulse-safety-desk patch]` in `engine.js` and `llm.js`): a manifest can set `llm_router.publisher_funded: true` so the site's own default router runs without a visitor key (spec section 4, Default inference). Offer it upstream to nsDeploy.
