@@ -272,7 +272,9 @@ export function mountApp(root, { engine, trace, manifest }) {
 
   const net = engine.top?.network;
   const title = manifest?.networks?.[0]?.description || net?.name || "Agent network";
-  const needsByok = !engine.mockLLM && (!engine.byokKey || engine.byokKey === "demo");
+  // [pulse-safety-desk patch] A publisher-funded default router needs no visitor key (spec 4).
+  const siteFunded = () => engine.top?.llm?.keyless === true;
+  const needsByok = !engine.mockLLM && !siteFunded() && (!engine.byokKey || engine.byokKey === "demo");
   const setupMessage = `To start, add an AI provider key. In ⚙ ${AI_MODEL_SETTINGS_LABEL}, choose a provider, create a key on its site, and paste it into the API key field. Then select Save and start. Your key is saved in this browser.`;
   const chatSlot = root.querySelector('[data-ns-slot="chat"]');
   const agentsSlot = root.querySelector('[data-ns-slot="agents"]');
@@ -327,6 +329,8 @@ export function mountApp(root, { engine, trace, manifest }) {
         ? `<div class="ns-llmbadge mock" title="The default router is a deterministic mock — it ignores the model name. Add a real key + router in ⚙ settings.">⚠ MOCK LLM — no real model</div>`
         : needsByok
           ? `<div class="ns-llmbadge error" title="${escapeHtml(setupMessage)}">API key required</div>`
+        : siteFunded()
+          ? `<div class="ns-llmbadge pending" title="This site pays for its default model. You can add your own key in settings.">Free model · no key needed</div>`
         : `<div class="ns-llmbadge pending" title="Configured router: ${escapeHtml(engine.top?.llm?.baseUrl || "")}. It will be verified by the first response.">LLM configured — awaiting verification</div>`}
       <div class="ns-breadcrumb" id="ns-breadcrumb">${escapeHtml(location.host)}</div>
       <button class="ns-devtoggle" id="ns-devtoggle" title="Show the technical execution trace">⚙ Developer</button>
@@ -1129,7 +1133,7 @@ export function mountApp(root, { engine, trace, manifest }) {
     const key = keyEl.value.trim();
     const model = normalizeModelName(modelEl.value);
     modelEl.value = model;
-    if (requireActiveKey && !engine.mockLLM && (!engine.byokKey || engine.byokKey === "demo")) {
+    if (requireActiveKey && !engine.mockLLM && !siteFunded() && (!engine.byokKey || engine.byokKey === "demo")) {
       const message = key
         ? "Your API key is ready. Select Save and start before sending a request."
         : setupMessage;

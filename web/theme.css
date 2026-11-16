@@ -51,8 +51,20 @@ h1 em{font-style:normal;color:var(--brass)}
 .desk-foot{border-top:1px solid var(--line);padding:16px;text-align:center;color:var(--dim2);font-size:13px}
 .desk-foot a{color:var(--dim)}
 
+/* Agent cards: the runtime's white cards made the names unreadable on the dark theme */
+.ns-anode{background:var(--raised)!important;color:var(--text)}
+.ns-anode .ns-aname{color:var(--text)}
+.ns-anode .ns-adot{background:var(--line2)}
+
 @media(max-width:820px){
-  #app{height:86vh}
+  /* One column on phones: chat first, agents below; no sideways scrolling */
+  #app{height:auto;min-height:0}
+  .ns-app{grid-template-columns:minmax(0,1fr)!important;grid-template-rows:auto auto auto!important;overflow-x:hidden!important;height:auto!important}
+  .ns-main{grid-column:1!important;grid-row:2!important;height:78vh}
+  .ns-split{display:none!important}
+  .ns-agents,.ns-dev{grid-column:1!important;grid-row:3!important;max-height:40vh}
+  .ns-header{flex-wrap:wrap;row-gap:6px}
+  .ns-breadcrumb{display:none}
   .desk-nav a:first-child{display:none}
   .desk-hero{padding-top:24px}
 }
