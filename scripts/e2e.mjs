@@ -26,7 +26,7 @@ if (process.env.E2E_TRACE) {
   for (const s of trace.spans.values()) {
     if (!/tool|mcp|model_call|agent/.test(s.kind)) continue;
     const err = s.error?.message || s.error || s.errorMessage || "";
-    console.log("SPAN", s.kind, s.status, s.tool || s.method || s.agent || "", String(err).slice(0, 400), "| ms", Math.round(s.durationMs || 0));
+    console.log("SPAN", s.kind, s.status, s.tool || s.method || s.agent || "", String(err).slice(0, 400), "| ms", Math.round(s.durationMs || 0), s.resultPreview ? "| " + String(s.resultPreview).slice(0, 160) : "");
   }
 }
 // Machine-checkable summary for tests: which tools each model call was offered.

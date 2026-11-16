@@ -1,6 +1,6 @@
 // site.js — small page touches after the runtime boots. Agent logic lives in the runtime.
-const COLORS = { AVOID: "#f43f5e", BLOCK: "#f43f5e", CAUTION: "#f59e0b", REVIEW: "#f59e0b", SAFE: "#10b981", OK: "#10b981", UNKNOWN: "#8a94a8" };
-const WORD = /\b(AVOID|BLOCK|CAUTION|REVIEW|SAFE|OK|UNKNOWN)\b/;
+const COLORS = { "NO WARNING SIGNS FOUND": "#10b981", "WARNING SIGNS FOUND": "#f59e0b", AVOID: "#f43f5e", BLOCK: "#f43f5e", CAUTION: "#f59e0b", REVIEW: "#f59e0b", SAFE: "#10b981", OK: "#10b981", UNKNOWN: "#8a94a8" };
+const WORD = /\b(NO WARNING SIGNS FOUND|WARNING SIGNS FOUND|AVOID|BLOCK|CAUTION|REVIEW|SAFE|OK|UNKNOWN)\b/;
 
 // Colors verdict words in one answer. Already-colored words are skipped, so it is safe to rerun.
 function paint(el) {
