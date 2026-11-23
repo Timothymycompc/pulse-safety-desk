@@ -14,6 +14,29 @@ import express from "express";
 import { createHash, randomBytes } from "node:crypto";
 import { Readable } from "node:stream";
 import { ModelQueue } from "./queue.js";
+import { asEventStream, correctionMessages, inventedAddresses, removeAddresses } from "./grounding.js";
+
+/** A final answer (no tool calls) may only name addresses the conversation contains: rewrite once, then remove. */
+export async function grounded(completion: any, messages: unknown[], ask: (m: unknown[]) => Promise<globalThis.Response>): Promise<any> {
+  const msg = completion?.choices?.[0]?.message;
+  if (!msg || typeof msg.content !== "string" || (Array.isArray(msg.tool_calls) && msg.tool_calls.length)) return completion;
+  const invented = inventedAddresses(msg.content, messages);
+  if (!invented.length) return completion;
+  try {
+    const again = await ask([...messages, ...correctionMessages(msg.content, invented)]);
+    if (again.ok) {
+      const second: any = await again.json();
+      const m2 = second?.choices?.[0]?.message;
+      if (m2 && typeof m2.content === "string" && !(Array.isArray(m2.tool_calls) && m2.tool_calls.length)) {
+        const still = inventedAddresses(m2.content, messages);
+        m2.content = removeAddresses(m2.content, still);
+        return second;
+      }
+    } else await again.body?.cancel().catch(() => {});
+  } catch { /* fall through: keep the first answer, minus the invented addresses */ }
+  msg.content = removeAddresses(msg.content, invented);
+  return completion;
+}
 
 export const GEMINI_OPENAI = "https://generativelanguage.googleapis.com/v1beta/openai";
 export const DEFAULT_MODEL = process.env.DESK_MODEL || "gemini-flash-lite-latest";
@@ -114,25 +137,38 @@ export function llmRoutes(getKey: () => string | undefined, fetchImpl: typeof fe
     try { await queue.acquire(ticket); } catch (e) { return refuse(res, 429, (e as Error).message); }
     if (req.socket.destroyed) return; // visitor left while waiting
     try {
-      const send = () => fetchImpl(`${GEMINI_OPENAI}/chat/completions`, {
+      // Asked for whole (not streamed) so the answer can be checked before the page sees it
+      // (grounding.ts); the page still gets the stream format it asked for.
+      const wantsStream = body.stream === true;
+      const send = (messages: unknown[]) => fetchImpl(`${GEMINI_OPENAI}/chat/completions`, {
         method: "POST",
         headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ ...body, messages, stream: false }),
       });
       // The free tier allows only a few requests per minute. On a per-minute limit,
       // wait and retry before giving up, so a busy moment doesn't break an answer.
-      let upstream = await send();
-      for (const wait of RETRY_WAITS_MS) {
-        if (upstream.status !== 429) break;
-        await upstream.body?.cancel().catch(() => {});
-        await new Promise((r) => setTimeout(r, wait));
-        upstream = await send();
-      }
+      const sendWithRetry = async (messages: unknown[]) => {
+        let upstream = await send(messages);
+        for (const wait of RETRY_WAITS_MS) {
+          if (upstream.status !== 429) break;
+          await upstream.body?.cancel().catch(() => {});
+          await new Promise((r) => setTimeout(r, wait));
+          upstream = await send(messages);
+        }
+        return upstream;
+      };
+      const messages = body.messages as unknown[];
+      const upstream = await sendWithRetry(messages);
       if (upstream.status === 429) {
         await upstream.body?.cancel().catch(() => {});
         return refuse(res, 429, "The free model is busy right now. Try again in a minute, or add your own key in AI model settings (the gear icon).");
       }
-      await relay(upstream, res);
+      if (!upstream.ok) return relay(upstream, res);
+      let completion: any = await upstream.json();
+      completion = await grounded(completion, messages, sendWithRetry);
+      res.setHeader("cache-control", "no-store");
+      if (wantsStream) { res.setHeader("content-type", "text/event-stream"); return void res.send(asEventStream(completion)); }
+      res.json(completion);
     } catch {
       refuse(res, 502, "Could not reach the model provider. Please try again.");
     }
