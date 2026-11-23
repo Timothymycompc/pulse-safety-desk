@@ -47,6 +47,7 @@ Tested live 2026-11-16 (`scripts/e2e.mjs`): "Someone sent me a token I don't kno
 - The vendored runtime carries three small fixes, listed in [`web/runtime/CHANGES.md`](web/runtime/CHANGES.md): site-funded default model, MCP tool limits, and Gemini's parallel tool calls.
 - A line for the shared free model (`server/queue.ts`): calls are spaced to the free tier's per-minute limit, and the page shows each visitor's place in line and wait time.
 - The model proxy adds Gemini's documented placeholder thought signature to earlier tool calls, which the runtime does not keep.
+- Grounding guard (`server/grounding.ts`): every answer from the free model is checked before the page sees it. A Solana address that appears nowhere in the question or the tool results makes the model rewrite once from the tool results; any address still made up is removed. It covers addresses only: the model can still word a fact loosely (seen once in three live runs of the attack demo, 2026-11-23), so the answer always names the Pulse tool each fact came from.
 - Secrets come from Google Secret Manager at startup. Deployed on Google Cloud Run.
 
 ```
