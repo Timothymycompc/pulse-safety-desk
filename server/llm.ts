@@ -1,8 +1,11 @@
 // llm.ts — the two model routes the browser runtime can use.
 //
-// /llm/v1  = the site's default inference (publisher-funded). The server adds its own
-//            Gemini key, forces one cheap model and caps request size and daily volume,
-//            so a visitor can use the desk without any key of their own.
+// /llm/v1  = the site's default inference (publisher-funded). On the live site it goes to
+//            PAID Vertex AI on the site's own Google Cloud project (2026-11-25): Google's
+//            free Gemini tier may use prompts for training and human review, must not get
+//            personal information, and may not serve users in the EEA, UK or Switzerland.
+//            The free key is only a fallback for local development with no Vertex project.
+//            One cheap model, capped request size and daily volume.
 // /byok/v1 = Bring Your Own Key. Forwards exactly the visitor's Authorization header
 //            to Gemini and never adds the server key (spec section 4, "caller-site BYOK proxy").
 //
@@ -39,6 +42,25 @@ export async function grounded(completion: any, messages: unknown[], ask: (m: un
 }
 
 export const GEMINI_OPENAI = "https://generativelanguage.googleapis.com/v1beta/openai";
+
+// Paid model: Vertex AI on the site's own Google Cloud project, billed to it, using the service's
+// own identity (no key). Set DESK_VERTEX_PROJECT (the live site does) to use it for every request.
+export type Paid = { url: string; model: string; token: () => Promise<string> };
+export function vertexModel(project = process.env.DESK_VERTEX_PROJECT, model = process.env.DESK_VERTEX_MODEL || "google/gemini-3.5-flash-lite"): Paid | null {
+  if (!project) return null;
+  let cached = { token: "", until: 0 };
+  return {
+    url: `https://aiplatform.googleapis.com/v1/projects/${project}/locations/global/endpoints/openapi/chat/completions`,
+    model,
+    token: async () => {
+      if (cached.token && Date.now() < cached.until) return cached.token;
+      const r = await fetch("http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token", { headers: { "Metadata-Flavor": "Google" } });
+      const j = await r.json() as { access_token: string; expires_in: number };
+      cached = { token: j.access_token, until: Date.now() + Math.max(60, j.expires_in - 120) * 1000 };
+      return cached.token;
+    },
+  };
+}
 export const DEFAULT_MODEL = process.env.DESK_MODEL || "gemini-flash-lite-latest";
 
 const DAILY_CAP = Number(process.env.DESK_DAILY_CAP || 1200); // whole site, default route only
@@ -121,13 +143,13 @@ export function cleanBody(body: any, forceModel?: string): Record<string, unknow
   return out;
 }
 
-export function llmRoutes(getKey: () => string | undefined, fetchImpl: typeof fetch = fetch, queue = new ModelQueue()): Router {
+export function llmRoutes(getKey: () => string | undefined, fetchImpl: typeof fetch = fetch, queue = new ModelQueue(), paid: Paid | null = vertexModel()): Router {
   const r = express.Router();
   r.use(express.json({ limit: MAX_BODY }));
 
   r.post("/llm/v1/chat/completions", async (req: Request, res: Response) => {
-    const key = getKey();
-    if (!key) return refuse(res, 503, "The site's free model is not configured right now. Add your own key in AI model settings.");
+    const key = paid ? undefined : getKey(); // paid model set: the free-tier key is never used
+    if (!key && !paid) return refuse(res, 503, "The site's free model is not configured right now. Add your own key in AI model settings.");
     const body = cleanBody(req.body, DEFAULT_MODEL);
     if (!body) return refuse(res, 400, "Expected an OpenAI-style chat request with messages.");
     const why = admit(req.ip || req.socket.remoteAddress || "unknown");
@@ -140,11 +162,17 @@ export function llmRoutes(getKey: () => string | undefined, fetchImpl: typeof fe
       // Asked for whole (not streamed) so the answer can be checked before the page sees it
       // (grounding.ts); the page still gets the stream format it asked for.
       const wantsStream = body.stream === true;
-      const send = (messages: unknown[]) => fetchImpl(`${GEMINI_OPENAI}/chat/completions`, {
-        method: "POST",
-        headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
-        body: JSON.stringify({ ...body, messages, stream: false }),
-      });
+      const send = async (messages: unknown[]) => paid
+        ? fetchImpl(paid.url, {
+            method: "POST",
+            headers: { "content-type": "application/json", authorization: `Bearer ${await paid.token()}` },
+            body: JSON.stringify({ ...body, model: paid.model, messages, stream: false }),
+          })
+        : fetchImpl(`${GEMINI_OPENAI}/chat/completions`, {
+            method: "POST",
+            headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
+            body: JSON.stringify({ ...body, messages, stream: false }),
+          });
       // The free tier allows only a few requests per minute. On a per-minute limit,
       // wait and retry before giving up, so a busy moment doesn't break an answer.
       const sendWithRetry = async (messages: unknown[]) => {

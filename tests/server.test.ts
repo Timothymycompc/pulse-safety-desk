@@ -147,6 +147,27 @@ test("per-visitor hourly limit and reset", () => {
   assert.equal(admit("visitor-a", new Date("2026-11-16T11:00:00Z")), null, "resets next hour");
 });
 
+test("paid model set: visitors' messages never reach the free tier (Gemini free-tier terms)", async () => {
+  resetLimits();
+  const seen: string[] = [];
+  const fake = (async (url: any, init: any) => {
+    seen.push(`${String(url).includes("aiplatform") ? "paid" : "free"} ${init.headers.authorization} ${JSON.parse(init.body).model}`);
+    return new Response(JSON.stringify({ choices: [{ message: { content: "No known traps found." } }] }), { headers: { "content-type": "application/json" } });
+  }) as typeof fetch;
+  const paid = { url: "https://aiplatform.googleapis.com/v1/projects/p/locations/global/endpoints/openapi/chat/completions", model: "google/gemini-3.5-flash-lite", token: async () => "SA-TOKEN" };
+  const app = express();
+  app.use(llmRoutes(() => "FREE-KEY-123", fake, undefined, paid));
+  const { base, close } = await listen(app);
+  try {
+    for (const stream of [false, true]) {
+      const r = await fetch(`${base}/llm/v1/chat/completions`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ stream, messages: [{ role: "user", content: "hi" }] }) });
+      assert.equal(r.status, 200);
+      assert.match(await r.text(), /No known traps/);
+    }
+    assert.deepEqual(seen, ["paid Bearer SA-TOKEN google/gemini-3.5-flash-lite", "paid Bearer SA-TOKEN google/gemini-3.5-flash-lite"], "free key never used; paid model uses the service identity");
+  } finally { close(); }
+});
+
 test("Wallet Helper manifest: own router, desk as an allowed peer, no open policy", () => {
   const m: any = manifestFor("helper", "https://helper.example");
   assert.equal(m.brand, "Wallet Helper");
